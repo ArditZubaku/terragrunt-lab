@@ -9,7 +9,7 @@ variable "handler" {
 
 variable "runtime" {
   type    = string
-  default = "python3.12"
+  default = "nodejs20.x"
 }
 
 variable "source_zip_path" {
