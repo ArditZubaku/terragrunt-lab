@@ -6,3 +6,5 @@
 crash.log*
 build/
 volume/
+node_modules/
+lambda-src/dist/

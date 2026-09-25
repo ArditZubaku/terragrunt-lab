@@ -78,5 +78,5 @@ smoke-test-tg:
 	./scripts/smoke-test.sh terragrunt-lab-tg-dev-ingest terragrunt-lab-tg-dev-reports
 
 clean:
-	rm -rf build
+	rm -rf build lambda-src/dist
 	find plain-terraform terragrunt -type d \( -name .terraform -o -name .terragrunt-cache \) -prune -exec rm -rf {} +
