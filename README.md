@@ -45,12 +45,13 @@ Four components was the minimum that gives a real two-dependency node (`ingest-l
 - `terraform` (this was built/tested against 1.16.3)
 - `terragrunt` (1.1.6 — `brew install terragrunt`; this is the "Terragrunt CLI redesign" version, commands are `terragrunt apply`, `terragrunt run --all apply`, `terragrunt dag graph`, not the old `plan-all`/`apply-all`)
 - `aws` CLI v2
+- Node.js + npm (to compile the Lambda handlers — they're TypeScript)
 - A LocalStack auth token in `.envrc` (`LOCALSTACK_AUTH_TOKEN=`) — see [Gotchas](#gotchas-hit-while-building-this), LocalStack now requires one even for community services. Free signup at app.localstack.cloud.
 
 ```bash
 direnv allow   # or: source .envrc
 make up        # docker compose up, waits for LocalStack health
-make build     # zips the two Lambda handlers into build/
+make build     # npm install + tsc, zips the two compiled handlers into build/
 ```
 
 ## Run it
@@ -114,7 +115,9 @@ These are real, not hypothetical — everything below is exactly what broke on t
 
 5. **Don't share `TF_PLUGIN_CACHE_DIR` across a `run --all` with real parallelism.** `storage` and `queue` have no dependency on each other, so Terragrunt correctly runs their `init` concurrently. Two concurrent `terraform init`s racing to populate the *same* shared plugin cache directory for the first time corrupted one provider binary (`exec format error`, then on retry a different unit hit `Failed to read any lines from plugin's stdout` — both are symptoms of a torn/partial binary from the race, not a real incompatibility). A second `run --all` succeeded immediately because the cache was already warm. This Makefile doesn't set `TF_PLUGIN_CACHE_DIR` by default for exactly this reason — each unit downloads into its own `.terragrunt-cache/`, which is slower but race-free. If you do want a shared cache for speed, Terragrunt's own `--provider-cache` flag is the race-safe way to get one (it runs a local caching proxy that serializes installs) — plain `TF_PLUGIN_CACHE_DIR` sharing is not safe under `run --all`'s parallelism.
 
-6. **LocalStack Lambda pulls a real base image on first invoke.** The `python3.12` Lambda runtime image (`public.ecr.aws/lambda/python:3.12`) gets pulled via Docker the first time any function actually runs, not at `apply` time — the first `smoke-test` after a fresh `docker compose up` will be slower than subsequent ones.
+6. **LocalStack Lambda pulls a real base image on first invoke.** The `nodejs20.x` Lambda runtime image (`public.ecr.aws/lambda/nodejs:20`) gets pulled via Docker the first time any function actually runs, not at `apply` time — the first `smoke-test` after a fresh `docker compose up` will be slower than subsequent ones.
+
+7. **The Lambda handlers are TypeScript compiled with plain `tsc`, not bundled.** `build.sh` runs `npm install` + `tsc` and zips just the compiled `handler.js` — `@aws-sdk/client-s3` is a devDependency used for types only, never zipped up. That works because AWS's Node.js Lambda runtime images (real AWS and LocalStack's matching `public.ecr.aws/lambda/nodejs:20`) ship AWS SDK v3 preinstalled, the same way the Python images ship boto3. Skip a bundler (esbuild/webpack) unless you need to pull in a dependency the base image doesn't already have.
 
 ## Mapping this back to `Holocene-Devs/infra`
 
